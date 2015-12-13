@@ -586,6 +586,7 @@ namespace bgfx { namespace d3d11
 			, m_captureResolve(NULL)
 			, m_wireframe(false)
 			, m_maxAnisotropy(1)
+			, m_depthClamp(false)
 			, m_currentProgram(NULL)
 			, m_vsChanges(0)
 			, m_fsChanges(0)
@@ -2166,19 +2167,33 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 		{
 			bool recenter   = !!(_resolution.m_flags & BGFX_RESET_HMD_RECENTER);
 
+			uint32_t maxAnisotropy = 1;
 			if (!!(_resolution.m_flags & BGFX_RESET_MAXANISOTROPY) )
 			{
-				m_maxAnisotropy = (m_featureLevel == D3D_FEATURE_LEVEL_9_1)
+				maxAnisotropy = (m_featureLevel == D3D_FEATURE_LEVEL_9_1)
 								? D3D_FL9_1_DEFAULT_MAX_ANISOTROPY
 								: D3D11_REQ_MAXANISOTROPY
 								;
 			}
-			else
+
+			if (m_maxAnisotropy != maxAnisotropy)
 			{
-				m_maxAnisotropy = 1;
+				m_maxAnisotropy = maxAnisotropy;
+				m_samplerStateCache.invalidate();
 			}
 
-			uint32_t flags = _resolution.m_flags & ~(BGFX_RESET_HMD_RECENTER | BGFX_RESET_MAXANISOTROPY);
+			bool depthClamp = true
+				&& !!(_resolution.m_flags & BGFX_RESET_DEPTH_CLAMP)
+				&& m_featureLevel > D3D_FEATURE_LEVEL_9_3 // disabling depth clamp is only supported on 10_0+
+				;
+
+			if (m_depthClamp != depthClamp)
+			{
+				m_depthClamp = depthClamp;
+				m_rasterizerStateCache.invalidate();
+			}
+
+			uint32_t flags = _resolution.m_flags & ~(BGFX_RESET_HMD_RECENTER | BGFX_RESET_MAXANISOTROPY | BGFX_RESET_DEPTH_CLAMP);
 
 			if (m_resolution.m_width  != _resolution.m_width
 			||  m_resolution.m_height != _resolution.m_height
@@ -2657,7 +2672,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 				desc.DepthBias = 0;
 				desc.DepthBiasClamp = 0.0f;
 				desc.SlopeScaledDepthBias = 0.0f;
-				desc.DepthClipEnable = m_featureLevel <= D3D_FEATURE_LEVEL_9_3;	// disabling depth clip is only supported on 10_0+
+				desc.DepthClipEnable = !m_depthClamp;
 				desc.ScissorEnable = _scissor;
 				desc.MultisampleEnable = !!(_state&BGFX_STATE_MSAA);
 				desc.AntialiasedLineEnable = false;
@@ -3340,6 +3355,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 
 		SwapChainDesc m_scd;
 		uint32_t m_maxAnisotropy;
+		bool m_depthClamp;
 
 		IndexBufferD3D11 m_indexBuffers[BGFX_CONFIG_MAX_INDEX_BUFFERS];
 		VertexBufferD3D11 m_vertexBuffers[BGFX_CONFIG_MAX_VERTEX_BUFFERS];
@@ -5614,7 +5630,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 					);
 
 				pos = 10;
-				tvm.printf(10, pos++, 0x8e, "       Frame: %7.3f, % 7.3f \x1f, % 7.3f \x1e [ms] / % 6.2f FPS "
+				tvm.printf(10, pos++, 0x8e, "        Frame: %7.3f, % 7.3f \x1f, % 7.3f \x1e [ms] / % 6.2f FPS "
 					, double(frameTime)*toMs
 					, double(min)*toMs
 					, double(max)*toMs
@@ -5625,7 +5641,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 				bx::snprintf(hmd, BX_COUNTOF(hmd), ", [%c] HMD ", hmdEnabled ? '\xfe' : ' ');
 
 				const uint32_t msaa = (m_resolution.m_flags&BGFX_RESET_MSAA_MASK)>>BGFX_RESET_MSAA_SHIFT;
-				tvm.printf(10, pos++, 0x8e, " Reset flags: [%c] vsync, [%c] MSAAx%d%s, [%c] MaxAnisotropy "
+				tvm.printf(10, pos++, 0x8e, "  Reset flags: [%c] vsync, [%c] MSAAx%d%s, [%c] MaxAnisotropy "
 					, !!(m_resolution.m_flags&BGFX_RESET_VSYNC) ? '\xfe' : ' '
 					, 0 != msaa ? '\xfe' : ' '
 					, 1<<msaa
@@ -5634,7 +5650,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 					);
 
 				double elapsedCpuMs = double(elapsed)*toMs;
-				tvm.printf(10, pos++, 0x8e, "   Submitted: %5d (draw %5d, compute %4d) / CPU %7.4f [ms] %c GPU %7.4f [ms] (latency %d) "
+				tvm.printf(10, pos++, 0x8e, "    Submitted: %5d (draw %5d, compute %4d) / CPU %7.4f [ms] %c GPU %7.4f [ms] (latency %d) "
 					, _render->m_num
 					, statsKeyType[0]
 					, statsKeyType[1]
@@ -5648,7 +5664,7 @@ BX_PRAGMA_DIAGNOSTIC_POP();
 
 				for (uint32_t ii = 0; ii < BX_COUNTOF(s_primName); ++ii)
 				{
-					tvm.printf(10, pos++, 0x8e, "   %9s: %7d (#inst: %5d), submitted: %7d, indirect %7d"
+					tvm.printf(10, pos++, 0x8e, "   %10s: %7d (#inst: %5d), submitted: %7d, indirect %7d"
 						, s_primName[ii]
 						, statsNumPrimsRendered[ii]
 						, statsNumInstances[ii]

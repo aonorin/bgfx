@@ -11,6 +11,7 @@ project "texturec"
 		path.join(BX_DIR, "include"),
 		path.join(BGFX_DIR, "include"),
 		path.join(BGFX_DIR, "src"),
+		path.join(BGFX_DIR, "3rdparty"),
 	}
 
 	files {
