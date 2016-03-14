@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2015 Branimir Karadzic. All rights reserved.
- * License: http://www.opensource.org/licenses/BSD-2-Clause
+ * Copyright 2011-2016 Branimir Karadzic. All rights reserved.
+ * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
 #include "common.h"
@@ -213,7 +213,7 @@ void screenSpaceQuad(float _textureWidth, float _textureHeight, float _texelHalf
 	}
 }
 
-class Deferred : public entry::AppI
+class ExampleDeferred : public entry::AppI
 {
 	void init(int _argc, char** _argv) BX_OVERRIDE
 	{
@@ -792,4 +792,4 @@ class Deferred : public entry::AppI
 	int64_t m_timeOffset;
 };
 
-ENTRY_IMPLEMENT_MAIN(Deferred);
+ENTRY_IMPLEMENT_MAIN(ExampleDeferred);

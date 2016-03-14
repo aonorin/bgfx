@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2015 Branimir Karadzic. All rights reserved.
- * License: http://www.opensource.org/licenses/BSD-2-Clause
+ * Copyright 2011-2016 Branimir Karadzic. All rights reserved.
+ * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
 #include "common.h"
@@ -70,7 +70,7 @@ static const int64_t highwm = 1000000/65;
 static const int64_t lowwm  = 1000000/57;
 #endif // BX_PLATFORM_EMSCRIPTEN || BX_PLATFORM_NACL
 
-class DrawStress : public entry::AppI
+class ExampleDrawStress : public entry::AppI
 {
 	void init(int _argc, char** _argv) BX_OVERRIDE
 	{
@@ -350,4 +350,4 @@ class DrawStress : public entry::AppI
 	bgfx::IndexBufferHandle  m_ibh;
 };
 
-ENTRY_IMPLEMENT_MAIN(DrawStress);
+ENTRY_IMPLEMENT_MAIN(ExampleDrawStress);

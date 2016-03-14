@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2015 Branimir Karadzic. All rights reserved.
- * License: http://www.opensource.org/licenses/BSD-2-Clause
+ * Copyright 2011-2016 Branimir Karadzic. All rights reserved.
+ * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
 #include "common.h"
@@ -103,7 +103,7 @@ static const uint16_t s_cubeIndices[36] =
 	21, 23, 22,
 };
 
-class Bump : public entry::AppI
+class ExampleBump : public entry::AppI
 {
 	void init(int _argc, char** _argv) BX_OVERRIDE
 	{
@@ -387,4 +387,4 @@ class Bump : public entry::AppI
 	int64_t m_timeOffset;
 };
 
-ENTRY_IMPLEMENT_MAIN(Bump);
+ENTRY_IMPLEMENT_MAIN(ExampleBump);
