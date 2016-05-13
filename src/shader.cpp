@@ -42,23 +42,23 @@ namespace bgfx
 		uint32_t magic;
 		bx::peek(_reader, magic);
 
-		if (magic == 0x07230203)
+		if (magic == SPV_CHUNK_HEADER)
 		{
 			SpirV spirv;
 			read(_reader, spirv, _err);
 			parse(spirv.shader, printAsm, _writer, _err);
 		}
-		else if (magic != BX_MAKEFOURCC('D', 'X', 'B', 'C') )
-		{
-			Dx9bc dx9bc;
-			read(_reader, dx9bc, _err);
-			parse(dx9bc.shader, printAsm, _writer, _err);
-		}
-		else
+		else if (magic == DXBC_CHUNK_HEADER)
 		{
 			DxbcContext dxbc;
 			read(_reader, dxbc, _err);
 			parse(dxbc.shader, printAsm, _writer, _err);
+		}
+		else
+		{
+			Dx9bc dx9bc;
+			read(_reader, dx9bc, _err);
+			parse(dx9bc.shader, printAsm, _writer, _err);
 		}
 	}
 

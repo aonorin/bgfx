@@ -11,6 +11,8 @@
 BX_ERROR_RESULT(BGFX_SHADER_SPIRV_INVALID_HEADER,      BX_MAKEFOURCC('S', 'H', 0, 1) );
 BX_ERROR_RESULT(BGFX_SHADER_SPIRV_INVALID_INSTRUCTION, BX_MAKEFOURCC('S', 'H', 0, 2) );
 
+#define SPV_CHUNK_HEADER BX_MAKEFOURCC(0x03, 0x02, 0x23, 0x07)
+
 namespace bgfx
 {
 	// Reference: https://www.khronos.org/registry/spir-v/specs/1.0/SPIRV.html
@@ -345,6 +347,8 @@ namespace bgfx
 		};
 	};
 
+	const char* getName(SpvOpcode::Enum _opcode);
+
 	struct SpvBuiltin
 	{
 		enum Enum
@@ -394,6 +398,8 @@ namespace bgfx
 			Count
 		};
 	};
+
+	const char* getName(SpvBuiltin::Enum _enum);
 
 	struct SpvExecutionModel
 	{
@@ -456,6 +462,8 @@ namespace bgfx
 		};
 	};
 
+	const char* getName(SpvStorageClass::Enum _enum);
+
 	struct SpvResourceDim
 	{
 		enum Enum
@@ -486,6 +494,7 @@ namespace bgfx
 			GLSLPacked,
 			CPacked,
 			BuiltIn,
+			Unknown12,
 			NoPerspective,
 			Flat,
 			Patch,
@@ -500,6 +509,7 @@ namespace bgfx
 			NonWritable,
 			NonReadable,
 			Uniform,
+			Unknown27,
 			SaturatedConversion,
 			Stream,
 			Location,
@@ -522,6 +532,8 @@ namespace bgfx
 		};
 	};
 
+	const char* getName(SpvDecoration::Enum _enum);
+
 	struct SpvOperand
 	{
 		SpvOperand() { /* not pod */ }
@@ -540,6 +552,7 @@ namespace bgfx
 			Decoration,
 			Dim,
 			Dref,
+			ElementType,
 			ExecutionModel,
 			Function,
 			FunctionControl,
@@ -547,6 +560,7 @@ namespace bgfx
 			IdRep,
 			ImageFormat,
 			ImageOperands,
+			LinkageType,
 			LiteralNumber,
 			LiteralRep,
 			LiteralString,
@@ -569,9 +583,8 @@ namespace bgfx
 		};
 
 		Enum type;
-		uint32_t data[4];
+		uint32_t data;
 
-		uint32_t target;
 		stl::string literalString;
 	};
 

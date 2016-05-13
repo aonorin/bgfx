@@ -65,8 +65,11 @@ namespace bgfx
 		{
 			char temp[2048];
 			char* out = temp;
+			va_list argListCopy;
+			va_copy(argListCopy, _argList);
 			int32_t len   = bx::snprintf(out, sizeof(temp), "%s (%d): ", _filePath, _line);
-			int32_t total = len + bx::vsnprintf(out + len, sizeof(temp)-len, _format, _argList);
+			int32_t total = len + bx::vsnprintf(out + len, sizeof(temp)-len, _format, argListCopy);
+			va_end(argListCopy);
 			if ( (int32_t)sizeof(temp) < total)
 			{
 				out = (char*)alloca(total+1);
@@ -1084,6 +1087,8 @@ namespace bgfx
 		CAPS_FLAGS(BGFX_CAPS_TEXTURE_BLIT),
 		CAPS_FLAGS(BGFX_CAPS_TEXTURE_READ_BACK),
 		CAPS_FLAGS(BGFX_CAPS_OCCLUSION_QUERY),
+		CAPS_FLAGS(BGFX_CAPS_ALPHA_TO_COVERAGE),
+		CAPS_FLAGS(BGFX_CAPS_CONSERVATIVE_RASTER),
 #undef CAPS_FLAGS
 	};
 
@@ -1149,6 +1154,10 @@ namespace bgfx
 		}
 
 		BX_TRACE("Max FB attachments: %d", g_caps.maxFBAttachments);
+		BX_TRACE("NDC depth [%d, 1], origin %s left."
+			, g_caps.homogeneousDepth ? -1 : 0
+			, g_caps.originBottomLeft ? "bottom" : "top"
+			);
 	}
 
 	TextureFormat::Enum getViableTextureFormat(const ImageContainer& _imageContainer)
@@ -1349,6 +1358,12 @@ namespace bgfx
 		m_dynVertexBufferAllocator.compact();
 		m_dynIndexBufferAllocator.compact();
 
+		BX_CHECK(m_vertexDeclHandle.getNumHandles() == uint16_t(m_declRef.m_vertexDeclMap.size() )
+				, "VertexDeclRef mismatch, num handles %d, handles in hash map %d."
+				, m_vertexDeclHandle.getNumHandles()
+				, m_declRef.m_vertexDeclMap.size()
+				);
+
 		m_declRef.shutdown(m_vertexDeclHandle);
 
 #if BGFX_CONFIG_MULTITHREADED
@@ -1419,14 +1434,14 @@ namespace bgfx
 			m_indexBufferHandle.free(_frame->m_freeIndexBufferHandle[ii].idx);
 		}
 
-		for (uint16_t ii = 0, num = _frame->m_numFreeVertexDeclHandles; ii < num; ++ii)
-		{
-			m_vertexDeclHandle.free(_frame->m_freeVertexDeclHandle[ii].idx);
-		}
-
 		for (uint16_t ii = 0, num = _frame->m_numFreeVertexBufferHandles; ii < num; ++ii)
 		{
 			destroyVertexBufferInternal(_frame->m_freeVertexBufferHandle[ii]);
+		}
+
+		for (uint16_t ii = 0, num = _frame->m_numFreeVertexDeclHandles; ii < num; ++ii)
+		{
+			m_vertexDeclHandle.free(_frame->m_freeVertexDeclHandle[ii].idx);
 		}
 
 		for (uint16_t ii = 0, num = _frame->m_numFreeShaderHandles; ii < num; ++ii)
@@ -2373,7 +2388,22 @@ namespace bgfx
 
 	bool init(RendererType::Enum _type, uint16_t _vendorId, uint16_t _deviceId, CallbackI* _callback, bx::AllocatorI* _allocator)
 	{
-		BX_CHECK(NULL == s_ctx, "bgfx is already initialized.");
+		if (NULL != s_ctx)
+		{
+			BX_CHECK(false, "bgfx is already initialized.");
+			return false;
+		}
+
+		if (!BX_ENABLED(BX_PLATFORM_EMSCRIPTEN || BX_PLATFORM_NACL)
+		&&  NULL == g_platformData.ndt
+		&&  NULL == g_platformData.nwh
+		&&  NULL == g_platformData.context
+		&&  NULL == g_platformData.backBuffer
+		&&  NULL == g_platformData.backBufferDS)
+		{
+			BX_CHECK(false, "bgfx platform data like window handle or backbuffer must be set.");
+			return false;
+		}
 
 		memset(&g_caps, 0, sizeof(g_caps) );
 		g_caps.maxViews     = BGFX_CONFIG_MAX_VIEWS;
@@ -2875,9 +2905,13 @@ namespace bgfx
 		_height = bx::uint16_max(1, _height);
 	}
 
-	TextureHandle createTexture2D(BackbufferRatio::Enum _ratio, uint16_t _width, uint16_t _height, uint8_t _numMips, TextureFormat::Enum _format, uint32_t _flags, const Memory* _mem)
+	static TextureHandle createTexture2D(BackbufferRatio::Enum _ratio, uint16_t _width, uint16_t _height, uint8_t _numMips, TextureFormat::Enum _format, uint32_t _flags, const Memory* _mem)
 	{
 		BGFX_CHECK_MAIN_THREAD();
+
+		BX_CHECK(0 == (_flags & BGFX_TEXTURE_RT_MASK) || 0 == (_flags & BGFX_TEXTURE_READ_BACK)
+			, "Can't create render target with BGFX_TEXTURE_READ_BACK flag."
+			);
 		BX_CHECK(0 != (g_caps.formats[_format] & (BGFX_CAPS_FORMAT_TEXTURE_2D|BGFX_CAPS_FORMAT_TEXTURE_2D_EMULATED|BGFX_CAPS_FORMAT_TEXTURE_2D_SRGB) )
 			, "Format %s is not supported for 2D texture. Use bgfx::getCaps to check available texture formats."
 			, getName(_format)
@@ -3630,11 +3664,17 @@ BGFX_C99_ENUM_CHECK(bgfx::RenderFrame,          BGFX_RENDER_FRAME_COUNT);
 			BX_STATIC_ASSERT(sizeof(_cppstruct) == sizeof(_c99struct) )
 
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::Memory,                bgfx_memory_t);
+BGFX_C99_STRUCT_SIZE_CHECK(bgfx::Transform,             bgfx_transform_t);
+BGFX_C99_STRUCT_SIZE_CHECK(bgfx::HMD::Eye,              bgfx_hmd_eye_t);
+BGFX_C99_STRUCT_SIZE_CHECK(bgfx::HMD,                   bgfx_hmd_t);
+BGFX_C99_STRUCT_SIZE_CHECK(bgfx::Stats,                 bgfx_stats_t);
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::VertexDecl,            bgfx_vertex_decl_t);
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::TransientIndexBuffer,  bgfx_transient_index_buffer_t);
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::TransientVertexBuffer, bgfx_transient_vertex_buffer_t);
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::InstanceDataBuffer,    bgfx_instance_data_buffer_t);
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::TextureInfo,           bgfx_texture_info_t);
+BGFX_C99_STRUCT_SIZE_CHECK(bgfx::Attachment,            bgfx_attachment_t);
+BGFX_C99_STRUCT_SIZE_CHECK(bgfx::Caps::GPU,             bgfx_caps_gpu_t);
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::Caps,                  bgfx_caps_t);
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::PlatformData,          bgfx_platform_data_t);
 BGFX_C99_STRUCT_SIZE_CHECK(bgfx::InternalData,          bgfx_internal_data_t);

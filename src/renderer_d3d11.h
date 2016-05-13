@@ -20,7 +20,7 @@ BX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4005) // warning C4005: '' : macro redefinitio
 #include <sal.h>
 #define D3D11_NO_HELPERS
 #if BX_PLATFORM_WINDOWS
-#	include <d3d11.h>
+#	include <d3d11_3.h>
 #	include <dxgi1_3.h>
 #elif BX_PLATFORM_WINRT
 #	include <d3d11_3.h>
@@ -32,8 +32,9 @@ BX_PRAGMA_DIAGNOSTIC_POP()
 #include "renderer.h"
 #include "renderer_d3d.h"
 #include "shader_dxbc.h"
-#include "ovr.h"
-#include "renderdoc.h"
+#include "hmd_ovr.h"
+#include "hmd_openvr.h"
+#include "debug_renderdoc.h"
 
 #ifndef D3DCOLOR_ARGB
 #	define D3DCOLOR_ARGB(_a, _r, _g, _b) ( (DWORD)( ( ( (_a)&0xff)<<24)|( ( (_r)&0xff)<<16)|( ( (_g)&0xff)<<8)|( (_b)&0xff) ) )
@@ -47,6 +48,7 @@ BX_PRAGMA_DIAGNOSTIC_POP()
 			| BGFX_STATE_BLEND_MASK \
 			| BGFX_STATE_BLEND_EQUATION_MASK \
 			| BGFX_STATE_BLEND_INDEPENDENT \
+			| BGFX_STATE_BLEND_ALPHA_TO_COVERAGE \
 			| BGFX_STATE_ALPHA_WRITE \
 			| BGFX_STATE_RGB_WRITE \
 			)
@@ -58,6 +60,29 @@ BX_PRAGMA_DIAGNOSTIC_POP()
 
 namespace bgfx { namespace d3d11
 {
+#if BGFX_CONFIG_USE_OVR
+	struct OVRBufferD3D11 : public OVRBufferI
+	{
+		virtual void create(const ovrSession& _session, int _eyeIdx, int _msaaSamples) BX_OVERRIDE;
+		virtual void destroy(const ovrSession& _session) BX_OVERRIDE;
+		virtual void render(const ovrSession& _session) BX_OVERRIDE;
+		virtual void postRender(const ovrSession& _session) BX_OVERRIDE;
+
+		ID3D11RenderTargetView* m_eyeRtv[4];
+		ID3D11DepthStencilView* m_depthBuffer;
+		ID3D11Texture2D* m_msaaTexture;
+		ID3D11ShaderResourceView* m_msaaSv;
+		ID3D11RenderTargetView* m_msaaRtv;
+	};
+
+	struct OVRMirrorD3D11 : public OVRMirrorI
+	{
+		virtual void create(const ovrSession& _session, int _width, int _height) BX_OVERRIDE;
+		virtual void destroy(const ovrSession& session) BX_OVERRIDE;
+		virtual void blit(const ovrSession& session) BX_OVERRIDE;
+	};
+#endif // BGFX_CONFIG_USE_OVR
+
 	struct BufferD3D11
 	{
 		BufferD3D11()

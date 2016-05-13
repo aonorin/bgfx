@@ -88,6 +88,9 @@ namespace bgfx
 
 	void dbgPrintfVargs(const char* _format, va_list _argList);
 	void dbgPrintf(const char* _format, ...);
+
+	inline bool operator==(const VertexDeclHandle& _lhs, const VertexDeclHandle& _rhs) { return _lhs.idx == _rhs.idx; }
+	inline bool operator==(const UniformHandle& _lhs,    const UniformHandle&    _rhs) { return _lhs.idx == _rhs.idx; }
 }
 
 #define _BX_TRACE(_format, ...) \
@@ -134,6 +137,7 @@ namespace bgfx
 #include <bx/allocator.h>
 #include <bx/string.h>
 #include <bx/os.h>
+#include <bx/maputil.h>
 
 #include <bgfx/bgfxplatform.h>
 #include "image.h"
@@ -1890,6 +1894,8 @@ namespace bgfx
 				}
 			}
 
+			bx::mapRemove(m_vertexDeclMap, declHandle);
+
 			return declHandle;
 		}
 
@@ -2265,6 +2271,7 @@ namespace bgfx
 			{
 				CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::DestroyVertexDecl);
 				cmdbuf.write(declHandle);
+				m_render->free(declHandle);
 			}
 
 			m_vertexBufferHandle.free(_handle.idx);
@@ -2378,7 +2385,10 @@ namespace bgfx
 			}
 
 			uint32_t offset = (dib.m_startIndex + _startIndex)*indexSize;
-			uint32_t size   = bx::uint32_min(bx::uint32_satsub(dib.m_size, _startIndex*indexSize), _mem->size);
+			uint32_t size   = bx::uint32_min(offset
+				+ bx::uint32_min(bx::uint32_satsub(dib.m_size, _startIndex*indexSize), _mem->size)
+				, BGFX_CONFIG_DYNAMIC_INDEX_BUFFER_SIZE) - offset
+				;
 			BX_CHECK(_mem->size <= size, "Truncating dynamic index buffer update (size %d, mem size %d)."
 				, size
 				, _mem->size
@@ -2528,9 +2538,12 @@ namespace bgfx
 			}
 
 			uint32_t offset = (dvb.m_startVertex + _startVertex)*dvb.m_stride;
-			uint32_t size   = bx::uint32_min(bx::uint32_satsub(dvb.m_size, _startVertex*dvb.m_stride), _mem->size);
+			uint32_t size   = bx::uint32_min(offset
+				+ bx::uint32_min(bx::uint32_satsub(dvb.m_size, _startVertex*dvb.m_stride), _mem->size)
+				, BGFX_CONFIG_DYNAMIC_VERTEX_BUFFER_SIZE) - offset
+				;
 			BX_CHECK(_mem->size <= size, "Truncating dynamic vertex buffer update (size %d, mem size %d)."
-				, dvb.m_size
+				, size
 				, _mem->size
 				);
 
@@ -2553,10 +2566,11 @@ namespace bgfx
 			DynamicVertexBuffer& dvb = m_dynamicVertexBuffers[_handle.idx];
 
 			VertexDeclHandle declHandle = m_declRef.release(dvb.m_handle);
-			if (invalidHandle != declHandle.idx)
+			if (isValid(declHandle) )
 			{
 				CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::DestroyVertexDecl);
 				cmdbuf.write(declHandle);
+				m_render->free(declHandle);
 			}
 
 			if (0 != (dvb.m_flags & BGFX_BUFFER_COMPUTE_WRITE) )
@@ -3037,7 +3051,7 @@ namespace bgfx
 					hash |= pr.m_fsh.idx << 16;
 				}
 
-				m_programHashMap.erase(m_programHashMap.find(hash) );
+				bx::mapRemove(m_programHashMap, hash);
 			}
 		}
 
@@ -3376,14 +3390,7 @@ namespace bgfx
 
 			if (0 == refs)
 			{
-				for (UniformHashMap::iterator it = m_uniformHashMap.begin(), itEnd = m_uniformHashMap.end(); it != itEnd; ++it)
-				{
-					if (it->second.idx == _handle.idx)
-					{
-						m_uniformHashMap.erase(it);
-						break;
-					}
-				}
+				bx::mapRemove(m_uniformHashMap, _handle);
 
 				CommandBuffer& cmdbuf = getCommandBuffer(CommandBuffer::DestroyUniform);
 				cmdbuf.write(_handle);
@@ -3616,7 +3623,7 @@ namespace bgfx
 		{
 			BGFX_CHECK_HANDLE("setUniform", m_uniformHandle, _handle);
 			UniformRef& uniform = m_uniformRef[_handle.idx];
-			BX_CHECK(uniform.m_num >= _num, "Truncated uniform update. %d (max: %d)", _num, uniform.m_num);
+			BX_CHECK(_num == UINT16_MAX || uniform.m_num >= _num, "Truncated uniform update. %d (max: %d)", _num, uniform.m_num);
 			if (BX_ENABLED(BGFX_CONFIG_DEBUG_UNIFORM) )
 			{
 				BX_CHECK(m_uniformSet.end() == m_uniformSet.find(_handle.idx)
